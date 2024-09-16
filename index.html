@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>이미지 EXIF 속성 검사 도구</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+      }
+
+      .container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        text-align: center;
+        width: 350px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+        color: #333;
+        margin-bottom: 20px;
+      }
+
+      input[type="file"] {
+        display: none;
+      }
+
+      label {
+        display: inline-block;
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+
+      #orientationResult {
+        margin-top: 20px;
+        font-size: 1.2rem;
+        color: #333;
+      }
+
+      .tip {
+        margin-top: 20px;
+        padding: 10px;
+        background-color: #f1f1f1;
+        border-radius: 8px;
+        text-align: left;
+        font-size: 0.9rem;
+        color: #666;
+        line-height: 1.5;
+      }
+
+      .tip-title {
+        font-weight: bold;
+        color: #007bff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>이미지 EXIF 속성 검사 도구</h1>
+      <label for="input">이미지 선택</label>
+      <input id="input" type="file" />
+
+      <div id="orientationResult">방향: -</div>
+
+      <div class="tip">
+        <div class="tip-title">TIP</div>
+        EXIF 데이터에서 방향(Orientation) 값이 1이면, 해당 이미지는 정상적으로 촬영된 상태입니다. 각 숫자는 다음과 같은 방향을 나타냅니다:
+        <ul>
+          <li>1: 이미지가 정상적인 방향 (회전 없음)</li>
+          <li>2: 좌우 반전된 상태</li>
+          <li>3: 180도 회전된 상태</li>
+          <li>4: 좌우 반전 후 180도 회전</li>
+          <li>5: 90도 시계 반대 방향으로 회전 후 좌우 반전</li>
+          <li>6: 90도 시계 방향으로 회전</li>
+          <li>7: 90도 시계 방향으로 회전 후 좌우 반전</li>
+          <li>8: 90도 시계 반대 방향으로 회전</li>
+        </ul>
+      </div>
+    </div>
+
+    <script>
+      function getOrientation(file, callback) {
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          var view = new DataView(e.target.result);
+          if (view.getUint16(0, false) != 0xffd8) {
+            return callback(-2);
+          }
+          var length = view.byteLength,
+            offset = 2;
+          while (offset < length) {
+            if (view.getUint16(offset + 2, false) <= 8) return callback(-1);
+            var marker = view.getUint16(offset, false);
+            offset += 2;
+            if (marker == 0xffe1) {
+              if (view.getUint32((offset += 2), false) != 0x45786966) {
+                return callback(-1);
+              }
+
+              var little = view.getUint16((offset += 6), false) == 0x4949;
+              offset += view.getUint32(offset + 4, little);
+              var tags = view.getUint16(offset, little);
+              offset += 2;
+              for (var i = 0; i < tags; i++) {
+                if (view.getUint16(offset + i * 12, little) == 0x0112) {
+                  return callback(view.getUint16(offset + i * 12 + 8, little));
+                }
+              }
+            } else if ((marker & 0xff00) != 0xff00) {
+              break;
+            } else {
+              offset += view.getUint16(offset, false);
+            }
+          }
+          return callback(-1);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      var input = document.getElementById("input");
+      var result = document.getElementById("orientationResult");
+
+      input.onchange = function (e) {
+        getOrientation(input.files[0], function (orientation) {
+          result.textContent = "방향: " + orientation;
+        });
+      };
+    </script>
+  </body>
+</html>
